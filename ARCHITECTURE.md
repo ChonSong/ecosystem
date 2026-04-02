@@ -267,3 +267,35 @@ ClawTeam delegation model mapped:
 | `ChonSong/repo-transmute` | Code blueprint index | Pending: evaluator deletion |
 | `ChonSong/ecosystem` | This document | Architecture doc |
 | `HKUDS/ClawTeam` | Swarm orchestration (external) | Sidecar integration point identified |
+
+---
+
+## Simplification Sprint — Complete
+
+### Phase 4 ✅ — repo-transmute evaluator deleted
+
+Verified: `repo-transmute/evaluator/` was self-contained, zero imports from other modules, never wired into the pipeline. Deleted:
+
+```
+src/repo_transmute/evaluator/__init__.py
+src/repo_transmute/evaluator/assumption_extractor.py
+src/repo_transmute/evaluator/audit.py
+src/repo_transmute/evaluator/drift_detector.py
+src/repo_transmute/evaluator/events.py
+src/repo_transmute/evaluator/interface.py
+src/repo_transmute/evaluator/search.py
+tests/test_evaluator.py
+
+8 files, 2000 deletions
+Commit: ChonSong/repo-transmute@4e04cd7
+```
+
+### All Simplification Phases Complete
+
+| Phase | Status |
+|---|---|
+| 1 — txtai dedup | ✅ AIE extends RepoTransmute TxtaiClient |
+| 2 — Tool dedup | ✅ codi delegates to claw-aie ToolExecutor |
+| 3 — ClawTeam research | ✅ Sidecar approach confirmed viable |
+| 4 — Delete repo-transmute evaluator | ✅ Deleted (2000 lines removed) |
+
