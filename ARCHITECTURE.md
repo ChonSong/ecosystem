@@ -221,3 +221,49 @@ If adding a new component to the ecosystem:
 4. If it uses code context, query RepoTransmute (Layer 4)
 5. If it coordinates agents, use ClawTeam (Layer 1)
 6. Update this document with the new component
+
+---
+
+## Simplification Sprint Results (2026-04-02)
+
+Completed phases 1-3 of the simplification sprint.
+
+### Phase 1 — txtai Deduplication ✅
+
+AIE `txtai_client.py` refactored to extend RepoTransmute's `TxtaiClient`. Shared FAISS index, separate `agent_events` collection. Commit: `cc37c20`.
+
+### Phase 2 — Tool Execution Deduplication ✅
+
+- **codi `nanobot_tools.py`** — delegatestool execution to `claw-aie ToolExecutor` for: bash, file_read, file_write, glob, grep
+- **`openhands_events.py`** in codi — DELETED (confirmed unused — nothing imported it)
+- Commit in codi workspace: `b3a1ac5`
+
+### Phase 3 — ClawTeam Research ✅
+
+ClawTeam delegation model mapped:
+
+| Component | What it does | Integration point |
+|---|---|---|
+| `FileTaskStore.update()` | Ownership change = delegation | `owner` field change → emit `delegation` event |
+| `FileTaskStore.create()` | Task creation | `blocked_by` → delegation tree |
+| `mailbox.py` | Agent-to-agent messages | Future: `message` event type |
+
+**Sidecar approach confirmed viable.** Wrapping `FileTaskStore.update()` to detect `owner` changes and emit AIE delegation events is the integration strategy.
+
+### Remaining Work
+
+| Item | Status |
+|---|---|
+| Delete `repo-transmute/evaluator/` | Pending — verify AIE covers all use cases |
+| ClawTeam sidecar implementation | Planned — integration point identified |
+| claw-aie Phase B-D | Planned — remaining harness features |
+
+### Repos
+
+| Repo | Description | Simplification sprint |
+|---|---|---|
+| `ChonSong/agent-interaction-evaluator` | AIE observability framework | txtai_client refactored to extend RepoTransmute |
+| `ChonSong/claw-aie` | Instrumented harness | ToolExecutor now canonical, codi delegates to it |
+| `ChonSong/repo-transmute` | Code blueprint index | Pending: evaluator deletion |
+| `ChonSong/ecosystem` | This document | Architecture doc |
+| `HKUDS/ClawTeam` | Swarm orchestration (external) | Sidecar integration point identified |
