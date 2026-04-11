@@ -1,8 +1,8 @@
 # Ecosystem Architecture
 
-> **Version:** 0.1
-> **Status:** Active — simplification sprint in progress
-> **Date:** 2026-04-02
+> **Version:** 0.2
+> **Status:** Active — sidecar MVP built
+> **Date:** 2026-04-11
 
 ---
 
@@ -20,9 +20,10 @@ The goal is not more agents. The goal is **agents you can trust** — because ev
 ┌─────────────────────────────────────────────────────────────────────┐
 │  LAYER 1: ORCHESTRATION                                              │
 │  ClawTeam — swarm coordination, task delegation, inbox, board         │
+│  + ClawTeam AIE Sidecar — delegation event emission                 │
 │  Responsibility: "What work exists and who owns it?"                │
 └──────────────────────────────────┬────────────────────────────────────┘
-                                   │ delegation events (AIE schema)
+                                   │ delegation events (written to JSONL)
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  LAYER 2: EXECUTION                                                  │
@@ -35,6 +36,7 @@ The goal is not more agents. The goal is **agents you can trust** — because ev
 ┌─────────────────────────────────────────────────────────────────────┐
 │  LAYER 3: OBSERVABILITY                                             │
 │  AIE — event indexing, oracle evaluation, drift detection, audit    │
+│  lobster heartbeat workflow (aie_heartbeat)                         │
 │  Responsibility: "Did the work make sense? Were assumptions valid?" │
 └──────────────────────────────────┬────────────────────────────────────┘
                                    │
@@ -69,12 +71,14 @@ Every component has exactly one owner. No shared ownership.
 | Component | Canonical Repo | Layer |
 |---|---|---|
 | Swarm orchestration | `HKUDS/ClawTeam` (external) | Layer 1 |
+| **ClawTeam AIE Sidecar** | `ChonSong/clawteam-sidecar` | Layer 1→3 |
 | Tool executor + hooks | `ChonSong/claw-aie` | Layer 2 |
 | Event schema (7 types) | `ChonSong/agent-interaction-evaluator` | Layer 3 |
-| AIE logger IPC (`/tmp/ailogger.sock`) | `ChonSong/agent-interaction-evaluator` | Layer 3 |
+| AIE logger + IPC | `ChonSong/agent-interaction-evaluator` | Layer 3 |
 | Drift detection | `ChonSong/agent-interaction-evaluator` | Layer 3 |
 | Oracle engine | `ChonSong/agent-interaction-evaluator` | Layer 3 |
 | Audit trails | `ChonSong/agent-interaction-evaluator` | Layer 3 |
+| lobster heartbeat workflow | `ChonSong/agent-interaction-evaluator` | Layer 3 |
 | txtai/FAISS index | `ChonSong/repo-transmute` (shared) | All layers |
 | Code blueprints | `ChonSong/repo-transmute` | Layer 4 |
 | Semantic chunking | `ChonSong/repo-transmute` | Layer 4 |
@@ -83,11 +87,12 @@ Every component has exactly one owner. No shared ownership.
 
 ## Repos
 
-| Repo | Description | Phase |
+| Repo | Description | Status |
 |---|---|---|
 | `ChonSong/agent-interaction-evaluator` | AIE observability framework | Phases 1-5 complete, 6-7 planned |
 | `ChonSong/claw-aie` | Instrumented harness with hook pipeline | Phase A complete, B-D planned |
 | `ChonSong/repo-transmute` | Code blueprint index + semantic search | Active |
+| `ChonSong/clawteam-sidecar` | Filesystem watcher for ClawTeam delegation events | MVP built |
 | `ChonSong/ecosystem` | This document — architecture and coordination | Active |
 | `HKUDS/ClawTeam` | Swarm orchestration (external, upstream) | — |
 
@@ -106,16 +111,15 @@ One FAISS index at `~/workspace/zoul/repo-transmute/data/txtai/`. Multiple colle
 
 Both collections share `sentence-transformers/all-MiniLM-L6-v2` embedding model and FAISS index files. Each has its own SQLite metadata sidecar.
 
-### AIE Logger IPC
+### AIE JSONL Log
 
-Unix socket at `/tmp/ailogger.sock`. JSON-RPC 2.0 protocol.
-
-All agents emit events here. AIE observes and indexes. Agents do not block on AIE.
+Delegation events are written directly to the daily JSONL log (no socket required):
 
 ```
-claw-aie → emit(tool_call) → /tmp/ailogger.sock → AIE indexer
-ClawTeam → emit(delegation) → /tmp/ailogger.sock → AIE indexer
+{agent-interaction-evaluator-repo}/data/logs/{YYYY-MM-DD}.jsonl
 ```
+
+The lobster `aie_heartbeat` workflow reads this log on each run.
 
 ### AIE Event Schema (Canonical)
 
@@ -133,44 +137,52 @@ Seven event types — the canonical schema for all agent interactions:
 
 ---
 
-## Simplification Decisions
+## ClawTeam Sidecar — Layer 1→3 Integration
 
-The following duplication was eliminated during the 2026-04-02 simplification sprint:
+**Repo:** `ChonSong/clawteam-sidecar`
 
-| What was removed | Why | Replaced by |
-|---|---|---|
-| `repo-transmute/src/repo_transmute/evaluator/` | Duplicated drift detection, audit, oracle logic | AIE |
-| `codi/nanobot_tools.py` | Duplicated tool executor | claw-aie `ToolExecutor` |
-| Separate AIE txtai client | Rewrote to import from RepoTransmute | Single source of truth |
-| `openhands_events.py` in codi | Dead code — nothing imported it | Deleted |
+The sidecar monitors ClawTeam's `FileTaskStore` task JSON files. When a task's `owner` field changes, it emits an AIE `delegation` event.
 
-### Rationale: Why Semantic Drift Replaces Keyword Drift
+**How it works:**
 
-| Method | Catches | Misses |
-|---|---|---|
-| Keyword-based ("but", "actually", "wait") | Explicit self-corrections | Re-phrased assumptions with no keyword |
-| Semantic similarity (txtai cosine) | Same assumption, different words | Implicit logical contradictions (NLI required) |
+```
+ClawTeam FileTaskStore.update() — owner changes
+    ↓ writes task JSON
+task-{id}.json modified
+    ↓ inotify/polling detects change
+sidecar parses old vs new owner
+    ↓ owner changed = delegation
+emits AIE delegation event → JSONL log
+    ↓ lobster aie_heartbeat reads on next run
+AIE indexes + evaluates + detects drift
+```
 
-Semantic similarity subsumes keyword detection. Keyword detection is a v1 heuristic rendered obsolete by semantic drift detection.
+**Why a sidecar (not a fork or inline patch):**
 
-### Rationale: Why Sidecar for ClawTeam
+- ClawTeam is external and actively maintained — permanent forking creates divergence
+- ClawTeam has a hooks system, but `AfterTaskUpdate` lacks `old_owner` — can't detect delegation without pre-change state
+- Filesystem monitoring is the most portable, least invasive integration point
+- No modifications to ClawTeam required
 
-Forking ClawTeam means maintaining permanent divergence from an actively-maintained upstream. ClawTeam is instrumented locally via a sidecar that intercepts delegation events and emits AIE-compatible events. No fork, no divergence.
+**Quick start:**
 
----
+```bash
+cd clawteam-sidecar && pip install -e .
+clawteam-sidecar --data-dir ~/.clawteam --team test-team
+```
 
-## Simplification Sprint (2026-04-02)
+**Files:**
 
-See `docs/SIMPLIFICATION_SPRINT.md` for the full sprint plan and decisions.
-
-### Open Questions — Resolved
-
-| # | Question | Decision |
-|---|---|---|
-| 1 | Delete `repo-transmute/evaluator/`? | ✅ DELETE — semantic drift subsumes keyword drift |
-| 2 | ClawTeam integration approach? | ✅ Sidecar — instrument locally, don't fork |
-| 3 | ARCHITECTURE.md location? | ✅ New repo: `ChonSong/ecosystem` |
-| 4 | `openhands_events.py` in codi? | ✅ DELETE — confirmed unused |
+```
+clawteam-sidecar/
+├── README.md
+├── setup.py
+├── bin/sidecar-run
+└── src/sidecar/
+    ├── __init__.py
+    ├── events.py      # AIE event dataclasses
+    └── watcher.py     # inotify/polling watcher + JSONL emitter
+```
 
 ---
 
@@ -179,15 +191,14 @@ See `docs/SIMPLIFICATION_SPRINT.md` for the full sprint plan and decisions.
 ```
 Human → ClawTeam: assigns task
     ↓
-ClawTeam delegation event
-    ↓ emit(delegation) → /tmp/ailogger.sock
-    ↓
+ClawTeam FileTaskStore.update() → task-{id}.json written
+    ↓ sidecar (inotify/polling) detects owner change
 claw-aie tool execution
-    ↓ emit(tool_call) → /tmp/ailogger.sock
+    ↓ emit(tool_call) → JSONL log
     ↓
 AIE indexer → txtai (agent_events collection)
     ↓
-AIE oracle evaluation (YAML oracles, 8 oracles)
+AIE oracle evaluation (YAML oracles)
     ↓
 AIE drift detection (semantic similarity ≥ 0.85 → drift flagged)
     ↓
@@ -198,16 +209,37 @@ Human ← AIE: drift alert (if critical) / audit trail (on demand)
 
 ---
 
-## Future: ClawTeam Swarm → AIE Events
+## lobster Heartbeat Workflow
 
-When a ClawTeam swarm runs:
+`evaluator/flows/aie_heartbeat.lobster` — autonomous drift scan + oracle evaluation + health check.
 
-1. Swarm coordinator delegates task to agent
-2. Sidecar intercepts delegation event → emits `delegation` to AIE
-3. Agent uses claw-aie tool executor → each tool emits `tool_call` to AIE
-4. AIE indexes, evaluates, detects drift
-5. If drift_score ≥ 0.9 → Circuit Breaker fires → swarm halts
-6. Human reviews audit trail
+**Steps:**
+
+```
+drift_scan  → evaluator.drift scan --all
+drift_check → check_drift.sh → _drift_status.json
+oracle_batch → evaluator.aieval batch
+oracle_check → check_oracle.sh → _oracle_status.json
+alert_and_halt → alert_and_halt.py
+observability_report → post_observability.sh
+health_check → check_health.sh
+```
+
+**Note:** The lobster workflow crashes on this environment due to a litellm/FAISS C extension segfault (Python 3.12 int string conversion + C extension cleanup race). The individual commands produce correct output when stdout is redirected to a file. See `ChonSong/clawteam-sidecar` for the JSONL-based approach that avoids this issue.
+
+---
+
+## Simplification Sprint (2026-04-02)
+
+See `docs/SIMPLIFICATION_SPRINT.md` for the full sprint plan and decisions.
+
+| Phase | Status |
+|---|---|
+| 1 — txtai dedup | ✅ AIE extends RepoTransmute TxtaiClient |
+| 2 — Tool dedup | ✅ codi delegates to claw-aie ToolExecutor |
+| 3 — ClawTeam research | ✅ Sidecar approach confirmed viable |
+| 4 — Delete repo-transmute evaluator | ✅ Deleted (2000 lines removed) |
+| **5 — ClawTeam sidecar MVP** | ✅ **Built** |
 
 ---
 
@@ -217,85 +249,7 @@ If adding a new component to the ecosystem:
 
 1. Determine which layer it belongs to
 2. Emit events in AIE schema (Layer 3)
-3. Emit to `/tmp/ailogger.sock` (Layer 3)
+3. Write to JSONL log or emit to AIE socket (Layer 3)
 4. If it uses code context, query RepoTransmute (Layer 4)
 5. If it coordinates agents, use ClawTeam (Layer 1)
 6. Update this document with the new component
-
----
-
-## Simplification Sprint Results (2026-04-02)
-
-Completed phases 1-3 of the simplification sprint.
-
-### Phase 1 — txtai Deduplication ✅
-
-AIE `txtai_client.py` refactored to extend RepoTransmute's `TxtaiClient`. Shared FAISS index, separate `agent_events` collection. Commit: `cc37c20`.
-
-### Phase 2 — Tool Execution Deduplication ✅
-
-- **codi `nanobot_tools.py`** — delegatestool execution to `claw-aie ToolExecutor` for: bash, file_read, file_write, glob, grep
-- **`openhands_events.py`** in codi — DELETED (confirmed unused — nothing imported it)
-- Commit in codi workspace: `b3a1ac5`
-
-### Phase 3 — ClawTeam Research ✅
-
-ClawTeam delegation model mapped:
-
-| Component | What it does | Integration point |
-|---|---|---|
-| `FileTaskStore.update()` | Ownership change = delegation | `owner` field change → emit `delegation` event |
-| `FileTaskStore.create()` | Task creation | `blocked_by` → delegation tree |
-| `mailbox.py` | Agent-to-agent messages | Future: `message` event type |
-
-**Sidecar approach confirmed viable.** Wrapping `FileTaskStore.update()` to detect `owner` changes and emit AIE delegation events is the integration strategy.
-
-### Remaining Work
-
-| Item | Status |
-|---|---|
-| Delete `repo-transmute/evaluator/` | Pending — verify AIE covers all use cases |
-| ClawTeam sidecar implementation | Planned — integration point identified |
-| claw-aie Phase B-D | Planned — remaining harness features |
-
-### Repos
-
-| Repo | Description | Simplification sprint |
-|---|---|---|
-| `ChonSong/agent-interaction-evaluator` | AIE observability framework | txtai_client refactored to extend RepoTransmute |
-| `ChonSong/claw-aie` | Instrumented harness | ToolExecutor now canonical, codi delegates to it |
-| `ChonSong/repo-transmute` | Code blueprint index | Pending: evaluator deletion |
-| `ChonSong/ecosystem` | This document | Architecture doc |
-| `HKUDS/ClawTeam` | Swarm orchestration (external) | Sidecar integration point identified |
-
----
-
-## Simplification Sprint — Complete
-
-### Phase 4 ✅ — repo-transmute evaluator deleted
-
-Verified: `repo-transmute/evaluator/` was self-contained, zero imports from other modules, never wired into the pipeline. Deleted:
-
-```
-src/repo_transmute/evaluator/__init__.py
-src/repo_transmute/evaluator/assumption_extractor.py
-src/repo_transmute/evaluator/audit.py
-src/repo_transmute/evaluator/drift_detector.py
-src/repo_transmute/evaluator/events.py
-src/repo_transmute/evaluator/interface.py
-src/repo_transmute/evaluator/search.py
-tests/test_evaluator.py
-
-8 files, 2000 deletions
-Commit: ChonSong/repo-transmute@4e04cd7
-```
-
-### All Simplification Phases Complete
-
-| Phase | Status |
-|---|---|
-| 1 — txtai dedup | ✅ AIE extends RepoTransmute TxtaiClient |
-| 2 — Tool dedup | ✅ codi delegates to claw-aie ToolExecutor |
-| 3 — ClawTeam research | ✅ Sidecar approach confirmed viable |
-| 4 — Delete repo-transmute evaluator | ✅ Deleted (2000 lines removed) |
-
