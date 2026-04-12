@@ -1,8 +1,8 @@
-# Phase 3 Roadmap — ChonSong Ecosystem
+# Ecosystem Roadmap — ChonSong Ecosystem
 
 **Date:** 2026-04-11
 **Author:** Architect Agent (Orchestrated by Principal Architect)
-**Status:** FINAL (pending approval)
+**Status:** Active — last updated 2026-04-12
 
 ---
 
@@ -822,7 +822,7 @@ agent-interaction-evaluator-repo/
 ├── scripts/                # ❌ EMPTY — Phase 5 missing
 ├── tests/
 ├── SPEC.md                 # Full spec
-├── REQUIREMENTS.md
+├── docs/archive/REQUIREMENTS.md
 └── README.md
 ```
 

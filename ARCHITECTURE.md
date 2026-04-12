@@ -232,7 +232,7 @@ health_check → check_health.sh
 
 ## Simplification Sprint (2026-04-02)
 
-See `docs/SIMPLIFICATION_SPRINT.md` for the full sprint plan and decisions.
+See `docs/docs/archive/SIMPLIFICATION_SPRINT.md` for the full sprint plan and decisions.
 
 | Phase | Status |
 |---|---|
