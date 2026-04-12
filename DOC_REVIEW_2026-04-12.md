@@ -255,4 +255,23 @@ Several docs could benefit from explicit links to related docs:
 
 ---
 
-*Review complete. Ready for Sean's review and prioritization.*
+*Review complete. All priority fixes applied and pushed.*
+
+---
+
+## Fix Status (applied 2026-04-12)
+
+| # | Fix | Status | Commit |
+|---|---|---|---|
+| 1 | Reconcile AIE phase status | ✅ Done | AIE `4c74b8e` |
+| 2 | Remove duplicate Phase 2 Extension | ✅ Done | ecosystem `a4174f3` |
+| 3 | Update repo-transmute Go status | ✅ Done | repo-transmute `0641905` |
+| 4 | Write proper claw-aie README | ✅ Done | claw-aie `d459909` |
+| 5 | Decide sidecar location → `clawteam-sidecar/` (separate) | ✅ Done | ecosystem `a4174f3` |
+
+Additional fixes applied:
+- claw-aie SPEC.md: Phase A marked complete, tool count clarified (4 MVP + 4 planned)
+- ecosystem ARCHITECTURE.md: added lobster to repos table, updated sidecar note
+- repo-transmute CLAUDE.md: Phase 4 status corrected to Complete
+
+
