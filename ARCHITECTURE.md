@@ -89,12 +89,13 @@ Every component has exactly one owner. No shared ownership.
 
 | Repo | Description | Status |
 |---|---|---|
-| `ChonSong/agent-interaction-evaluator` | AIE observability framework | Phases 1-5 complete, 6-7 planned |
+| `ChonSong/agent-interaction-evaluator` | AIE observability framework | Phases 1-5 source complete, e2e testing pending, 6-7 planned |
 | `ChonSong/claw-aie` | Instrumented harness with hook pipeline | Phase A complete, B-D planned |
 | `ChonSong/repo-transmute` | Code blueprint index + semantic search | Active |
-| `ChonSong/clawteam-sidecar` | Filesystem watcher for ClawTeam delegation events | MVP built |
+| `ChonSong/clawteam-sidecar` | Filesystem watcher for ClawTeam delegation events | MVP built, separate from claw-aie |
 | `ChonSong/ecosystem` | This document — architecture and coordination | Active |
 | `HKUDS/ClawTeam` | Swarm orchestration (external, upstream) | — |
+| `openclaw/lobster` | Workflow engine for aie_heartbeat | Active |
 
 ---
 

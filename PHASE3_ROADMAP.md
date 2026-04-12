@@ -108,7 +108,7 @@ OpenClaw's FastAPI routes (`workspace/openclaw/src/api/routes/tasks.py`) import 
 
 ### 2.4 Files to Create/Modify
 
-**New file:** `workspace/zoul/claw-aie/sidecar/clawteam_sidecar.py`
+**Existing file:** `workspace/zoul/clawteam-sidecar/src/sidecar/watcher.py`
 
 ```python
 """
@@ -135,8 +135,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 try:
     from evaluator.logger_client import AILoggerClient
 except ImportError:
-    # Fallback: use logger client from claw-aie's aie_integration
-    from aie_integration.hooks.aie_emitter import AILoggerClient
+    AILoggerClient = None  # Sidecar runs independently of claw-aie
 
 
 def wrap_TaskStore_update(original_update):
@@ -237,7 +236,7 @@ def install_sidecar(ailogger_socket_path: str = "/tmp/ailogger.sock"):
     print(f"[clawteam_sidecar] Installed — emitting to {ailogger_socket_path}")
 ```
 
-**New file:** `workspace/zoul/claw-aie/sidecar/__init__.py`
+**Existing file:** `workspace/zoul/clawteam-sidecar/src/sidecar/events.py`
 
 ```python
 from .clawteam_sidecar import install_sidecar
