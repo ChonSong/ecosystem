@@ -1,6 +1,6 @@
 # Ecosystem Integration Map
 
-> Updated: 2026-04-15 — includes browser-review agent and Phase E completion
+> Updated: 2026-04-17 — includes browser-review agent and Phase E completion
 
 ## Architecture Diagram
 

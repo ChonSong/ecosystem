@@ -1,4 +1,4 @@
-# E2E Validation Report — 2026-04-12
+# E2E Validation Report — 2026-04-17
 
 > First-ever end-to-end test of the AIE pipeline with a live logger.
 
@@ -29,7 +29,7 @@ All 4 pipeline stages work end-to-end. 2 bugs found and fixed.
 ### Stage 2: JSONL Persistence
 | Test | Result |
 |---|---|
-| Events written to `evaluator/data/logs/2026-04-12.jsonl` | ✅ |
+| Events written to `evaluator/data/logs/2026-04-17.jsonl` | ✅ |
 | All 8 events + 4 circuit_breaker events persisted | ✅ |
 | Schema intact (parseable JSON) | ✅ |
 
